@@ -3,10 +3,14 @@ use std::{
     fmt,
 };
 
-use rnix::{SmolStr, SyntaxElement, SyntaxKind::NODE_ROOT, SyntaxNode, TextUnit};
+use rnix::{
+    SmolStr, SyntaxElement,
+    SyntaxKind::{NODE_ROOT, TOKEN_WHITESPACE},
+    SyntaxNode, TextUnit,
+};
 
 use crate::{
-    dsl::{IndentRule, Modality},
+    dsl::{IndentCtx, IndentRule, Modality},
     engine::{BlockPosition, FmtModel, SpaceBlock, SpaceBlockOrToken},
     pattern::{Pattern, PatternSet},
 };
@@ -145,7 +149,7 @@ impl IndentRule {
         let anchor_indent = match indent_anchor(element, model, anchor_set) {
             Some((anchor, indent)) => {
                 if let Some(p) = &self.anchor_pattern {
-                    if !p.matches(&anchor.into()) {
+                    if !p(&anchor.into(), model) {
                         default_indent(element, model, anchor_set);
                         return;
                     }
@@ -245,6 +249,22 @@ impl FmtModel {
             }
             (len_for_indent(s), false)
         }
+    }
+}
+
+impl IndentCtx for FmtModel {
+    fn is_multiline(&mut self, node: &SyntaxNode) -> bool {
+        for token in node
+            .descendants_with_tokens()
+            .filter_map(|it| it.into_token())
+            .filter(|it| it.kind() != TOKEN_WHITESPACE)
+            .skip(1)
+        {
+            if self.block_for(&token.into(), BlockPosition::Before).has_newline() {
+                return true;
+            }
+        }
+        return false;
     }
 }
 

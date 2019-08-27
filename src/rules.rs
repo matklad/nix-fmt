@@ -7,7 +7,7 @@ use rnix::{
 };
 
 use crate::{
-    dsl::{self, IndentDsl, IndentValue::*, SpacingDsl},
+    dsl::{self, IndentDsl, IndentValue::*, SpacingDsl, IndentCtx},
     pattern::{p, Pattern},
     tree_utils::{has_newline, next_non_whitespace_sibling, prev_sibling},
 };
@@ -455,8 +455,8 @@ fn on_top_level(element: &SyntaxElement) -> bool {
     }
 }
 
-fn set_entry_with_single_line_value(element: &SyntaxElement) -> bool {
-    fn find(element: SyntaxElement) -> Option<bool> {
+fn set_entry_with_single_line_value(element: &SyntaxElement, ctx: &mut dyn IndentCtx) -> bool {
+    fn find(element: SyntaxElement, ctx: &mut dyn IndentCtx) -> Option<bool> {
         let element = element.into_node().and_then(SetEntry::cast)?;
         let mut value = element.value()?;
         if Operation::cast(value.clone()).is_none() {
@@ -465,9 +465,9 @@ fn set_entry_with_single_line_value(element: &SyntaxElement) -> bool {
         while let Some(op) = Operation::cast(value.clone()) {
             value = op.value1()?
         }
-        Some(!has_newline(&value))
+        Some(!ctx.is_multiline(&value.into()))
     }
-    find(element.clone()) == Some(true)
+    find(element.clone(), ctx) == Some(true)
 }
 
 fn rhs_of_binop(rhs: &SyntaxElement) -> bool {

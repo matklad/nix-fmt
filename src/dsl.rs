@@ -1,5 +1,7 @@
 //! This module contains a definition of pattern-based formatting DSL.
-use rnix::SyntaxElement;
+use std::fmt;
+
+use rnix::{SyntaxElement, SyntaxNode};
 
 use crate::{
     pattern::Pattern,
@@ -235,7 +237,6 @@ impl RuleName {
 /// * indent relative to the parent.
 ///
 /// For this reason, `indent_value` is mostly unused.
-#[derive(Debug)]
 pub(crate) struct IndentRule {
     pub(crate) name: RuleName,
     pub(crate) parent: Pattern,
@@ -260,8 +261,21 @@ pub(crate) struct IndentRule {
     /// when we indent lambda body, `x * 2` is the thing to which the `pattern`
     /// applies and `f = x ...` is the thing to which the `anchor_pattern`
     /// applies.
-    pub(crate) anchor_pattern: Option<Pattern>,
+    pub(crate) anchor_pattern: Option<fn(&SyntaxElement, &mut dyn IndentCtx) -> bool>,
     pub(crate) indent_value: IndentValue,
+}
+
+impl fmt::Debug for IndentRule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IndentRule")
+            .field("name", &self.name)
+            .field("parent", &self.parent)
+            .field("child", &self.child)
+            .field("child_modality", &self.child_modality)
+            .field("anchor_pattern", &self.anchor_pattern.is_some())
+            .field("indent_value", &self.indent_value)
+            .finish()
+    }
 }
 
 /// A builder to conveniently specify a set of `IndentRule`s.
@@ -314,7 +328,7 @@ pub(crate) struct IndentRuleBuilder<'a> {
     parent: Option<Pattern>,
     child: Option<Pattern>,
     child_modality: Modality,
-    anchor_pattern: Option<Pattern>,
+    anchor_pattern: Option<fn(&SyntaxElement, &mut dyn IndentCtx) -> bool>,
 }
 
 impl<'a> IndentRuleBuilder<'a> {
@@ -371,8 +385,15 @@ impl<'a> IndentRuleBuilder<'a> {
 
     /// Only apply this rule when `cond` is true for the anchor node, relative
     /// to which we compute indentation level.
-    pub(crate) fn when_anchor(mut self, cond: fn(&SyntaxElement) -> bool) -> Self {
-        self.anchor_pattern = Some(cond.into());
+    pub(crate) fn when_anchor(
+        mut self,
+        cond: fn(&SyntaxElement, &mut dyn IndentCtx) -> bool,
+    ) -> Self {
+        self.anchor_pattern = Some(cond);
         self
     }
+}
+
+pub(crate) trait IndentCtx {
+    fn is_multiline(&mut self, node: &SyntaxNode) -> bool;
 }
